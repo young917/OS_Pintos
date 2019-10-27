@@ -1,0 +1,9 @@
+{
+    "C_Cpp.dimInactiveRegions": false,
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "list": "c",
+        "intr-stubs.h": "c",
+        "synch.h": "c"
+    }
+}
