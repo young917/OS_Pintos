@@ -206,8 +206,8 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
 #ifdef USERPROG
+  cur_thread = thread_current();// parent of thread t.
   /* Set relation between cur_thread and t as parent and child */
-  cur_thread = thread_current();// parent thread of t.
   t->parent = cur_thread;
   list_push_front(&cur_thread->children, &t->thread_elem);
 #endif

@@ -77,16 +77,21 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
-  if (!success){
+  if (!success){/* fail load. */
+    /* notify parent that loading failed. */
     t->parent->child_load_success = false;
+    /* notify parent that loading is finished. */
     sema_up(&t->parent->load_wait_signal);
     
     exit(-1);
   }
   
   else{
+    /* notify parent that loading succeeds. */
     t->parent->child_load_success = true;
+    /* current thread has signal for load success.*/
     t->load_success = true;
+    /* notify parent that loading is finished. */
     sema_up(&t->parent->load_wait_signal);
   }
 
@@ -119,10 +124,16 @@ process_wait (tid_t child_tid UNUSED)
 
   for (e = list_begin (&parent->children); e != list_end (&parent->children); e = list_next (e)){
     child = list_entry( e, struct thread, thread_elem);
+    /* To prevent wait twice for same child, 
+     * child->needs wait becomes false when parent appears to wait child.
+     */
+    // previous : if(child->tid == child_tid && child->needs_wait)
     if(child->tid == child_tid && child->needs_wait){
       child->needs_wait = false;
+      /* wait for child exit */
       sema_down(&child->exit_signal);
       child_status = child->exit_status;
+      /* send child message that parent gets child->exit status successfully */
       sema_up(&child->wait_signal);
       break;
     }
@@ -157,11 +168,15 @@ process_exit (void)
     cur->exit_status = -1;
   }
 
+  /* Only when load is successful, parent will wait. */
   if(cur->load_success){
+    /* send parent that child is on the exit status. */
     sema_up(&cur->exit_signal);
+    /* receive that parent noticed child's exit status. */
     sema_down(&cur->wait_signal);
   }
 
+  /* remove this child from parent children list. */
   list_remove(&cur->thread_elem);
 }
 
@@ -386,27 +401,29 @@ void argument_passing(char *file_name_, void** esp){
   size_t buffer[36];
   void *arg_pointer;
 
-  // take argument and count number of blank between arguments
+  /* put arguments that are seperated by '\0' into argvs[] */
   for( token = strtok_r(file_name_," ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr)){
     strlcpy(argvs+i, token, strlen(token)+1);
     arg_len[argc] = strlen(token)+1;
     i+=arg_len[argc];
     argc++;  
-  }  
+  } 
   input_len = i;
+  /* To make Word_aligned access */
   word_align = (size_t)(4 - input_len % 4);
 
-   // push original input string.
+  /* push argvs */
   (*esp)-=input_len;
   memcpy(*esp, argvs, input_len);
+  /* arg_pointer is start point of argvs in the stack */
   arg_pointer = (*esp);
 
-  // push word_align + argv pointers + argv + argc + return address.
+  /* push word_align + argv pointers + argv + argc + return address. */
   (*esp) -= word_align + (argc + 4) * (sizeof(size_t));
 
   buffer[0] = 0;// return address
   buffer[1] = (size_t)argc;
-  buffer[2] = (size_t)(*esp) + 3*(sizeof(size_t));
+  buffer[2] = (size_t)(*esp) + 3*(sizeof(size_t));// start point of argvs pointers in the stack.
   for(i=0 ; i < argc ; i++){
     buffer[i+3] = (size_t)arg_pointer;
     arg_pointer += arg_len[i];

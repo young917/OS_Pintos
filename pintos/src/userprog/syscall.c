@@ -26,7 +26,8 @@ pid_t exec (const char *file);
 int wait (pid_t pid);
 int read (int fd, void *buffer, unsigned size);
 int write (int fd, const void *buffer, unsigned size);
-
+int fibonacci(int n);
+int sum_of_four_int(int a, int b, int c, int d);
 void
 syscall_init (void) 
 {
@@ -38,6 +39,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   void *esp = f->esp;
   is_user_vaddr(esp);
+
+  /* top of stack is system call number */
   uint32_t syscall_number = *(uint32_t *)esp;
 
   switch(syscall_number){
@@ -90,6 +93,25 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       break;
     }
+    /* Additional System Calls */
+    case SYS_FIB:{
+      if(!is_user_vaddr(esp+WORD)){
+        exit(-1);
+      }
+      else{
+        f->eax = fibonacci((int )*(uint32_t *)(esp+WORD));
+      }
+      break;
+    }
+    case SYS_SMF:{
+      if(!(is_user_vaddr(esp+WORD) && is_user_vaddr(esp+2*WORD) && is_user_vaddr(esp+3*WORD) && is_user_vaddr(esp+4*WORD))){
+        exit(-1);
+      }
+      else{
+        f->eax = sum_of_four_int((int )*(uint32_t *)(esp+WORD), (int )*(uint32_t *)(esp+2*WORD), (int )*(uint32_t *)(esp+3*WORD), (int )*(uint32_t *)(esp+4*WORD));
+      }
+      break;
+    }
   }
 }
 void
@@ -113,18 +135,23 @@ exec (const char *file)
   struct thread *parent = thread_current();
 
   ret = process_execute(file);
+
   if(ret != TID_ERROR){
-    
+    /* receive signal that child's load is finished. */
     sema_down(&parent->load_wait_signal);
 
+    /* If load failed, */
     if(!parent->child_load_success){
       ret = TID_ERROR;
+      /* This makes parent not wait this child. */
     }
 
+   /* To reuse for other child */
     parent->child_load_success = false;
-  } 
+  }
   return ret;
 }
+
 int
 wait (pid_t pid)
 {
@@ -167,4 +194,35 @@ write (int fd, const void *buffer, unsigned size)
     exit(-1);
   }
   return -1;
+}
+int
+fibonacci(int n)
+{ //   1 2 3 4 5 6 7  8  9  10 
+  //   1 1 2 3 5 8 13 21 34 55
+  int fibo_prev = 0;
+  int fibo_cur = 1;
+  int fibo_next;
+  int i;
+
+  if(n == 0){
+    return 0;
+  }
+  else if(n == 1){
+    return 1;
+  }
+  else if( n < 0 ){
+    exit(-1);
+  }
+
+  for(i = 2; i <= n ; i++ ){
+    fibo_next = fibo_prev + fibo_cur;
+    fibo_prev = fibo_cur;
+    fibo_cur = fibo_next;
+  }
+  return fibo_cur;
+}
+int
+sum_of_four_int(int a, int b, int c, int d)
+{
+  return (a+b+c+d);
 }
