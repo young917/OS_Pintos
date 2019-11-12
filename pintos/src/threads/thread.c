@@ -480,7 +480,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
 #ifdef USERPROG
   t->parent = NULL;
-  list_init (&t->children);
+  list_init(&t->children);
+  list_init(&t->files);
   sema_init( &t->exit_signal, 0);
   sema_init( &t->wait_signal, 0);
   sema_init( &t->load_wait_signal, 0);
@@ -488,6 +489,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->load_success = false;
   t->exit_status = 0;
   t->needs_wait = true;
+  t->fdn = 2;
 #endif
 }
 

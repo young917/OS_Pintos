@@ -108,10 +108,21 @@ struct thread
     struct semaphore load_wait_signal;
     struct semaphore exit_signal;
     struct semaphore wait_signal;
+	  /* Managing File System */
+	  struct list files;
+	  struct file *executing_file;
+	  int fdn;
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+  };
+
+  struct file_info
+  {
+	  int fd;
+	  struct file *fp;
+	  struct list_elem file_elem;
   };
 
 /* If false (default), use round-robin scheduler.

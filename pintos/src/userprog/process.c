@@ -92,6 +92,9 @@ start_process (void *file_name_)
     /* current thread has signal for load success.*/
     t->load_success = true;
     /* notify parent that loading is finished. */
+    t->executing_file = filesys_open(t->name);
+    file_deny_write(t->executing_file);
+
     sema_up(&t->parent->load_wait_signal);
   }
 
@@ -146,10 +149,14 @@ void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
+  struct list_elem *cur_file_elem;
+  struct list_elem *pre_file_elem;
+  struct file_info *fentry;
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -170,12 +177,20 @@ process_exit (void)
 
   /* Only when load is successful, parent will wait. */
   if(cur->load_success){
+    file_close(cur->executing_file);
+
+    /* close all files that the thread opens */
+    while(!list_empty(&cur->files)){
+      cur_file_elem = list_pop_front(&cur->files);
+      fentry = list_entry( cur_file_elem, struct file_info, file_elem);
+      file_close(fentry->fp);
+      free(fentry);
+    }
     /* send parent that child is on the exit status. */
     sema_up(&cur->exit_signal);
     /* receive that parent noticed child's exit status. */
     sema_down(&cur->wait_signal);
   }
-
   /* remove this child from parent children list. */
   list_remove(&cur->thread_elem);
 }
