@@ -391,6 +391,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       break;
     }
   }
+  file_name_[i] = '\0';
   argument_passing(file_name_, esp);
 
   /* Start address. */
