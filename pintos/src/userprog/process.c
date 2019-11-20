@@ -91,10 +91,12 @@ start_process (void *file_name_)
     t->parent->child_load_success = true;
     /* current thread has signal for load success.*/
     t->load_success = true;
-    /* notify parent that loading is finished. */
+    /* store the file that current thread executes.*/
     t->executing_file = filesys_open(t->name);
+    /* deny writing on the file that is executing*/
     file_deny_write(t->executing_file);
-
+    
+    /* notify parent that loading is finished. */
     sema_up(&t->parent->load_wait_signal);
   }
 
@@ -177,7 +179,6 @@ process_exit (void)
 
   /* Only when load is successful, parent will wait. */
   if(cur->load_success){
-    file_close(cur->executing_file);
 
     /* close all files that the thread opens */
     while(!list_empty(&cur->files)){
@@ -186,6 +187,9 @@ process_exit (void)
       file_close(fentry->fp);
       free(fentry);
     }
+    /* close the file that the thread executes */
+    file_close(cur->executing_file);
+
     /* send parent that child is on the exit status. */
     sema_up(&cur->exit_signal);
     /* receive that parent noticed child's exit status. */

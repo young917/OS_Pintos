@@ -249,7 +249,8 @@ read (int fd, void *buffer, unsigned size)
   if (!is_vaddr(buffer) || !is_vaddr(buffer + size)){
 	  exit (-1);
   }
- 
+
+  /* standard out */
   if(fd == 0){
     while(i < (int)size){
       buf[i] = input_getc();
@@ -260,13 +261,16 @@ read (int fd, void *buffer, unsigned size)
     }
     return i;
   }
+  /* read file */
   else if(fd > 1){
+	  /* get file pointer from file descriptor number*/
 	  fp = fd2fp(fd);
 	  if(fp == NULL){
 		  return -1;
 	  }
 	  else{
 		  lock_acquire(&syscall_lock);
+		  /* After using lock, read file */
 		  readn = file_read(fp, buffer, size);
 		  lock_release(&syscall_lock);
 		  return readn;
@@ -285,13 +289,17 @@ write (int fd, const void *buffer, unsigned size)
 		exit (-1);
 	}
 	
+	/* standard in */
 	if(fd == 1){
     	putbuf(buffer,size);
     	return size;
   	}
+	/* write file */
   	else if( fd > 1){
+		/* get file pointer from file descriptor number*/
 		fp = fd2fp(fd);
     	lock_acquire(&syscall_lock);
+		/* After using lock, write file */
 		writen = file_write(fp, buffer, size);
 		lock_release(&syscall_lock);
 		return writen;
@@ -355,6 +363,7 @@ remove(const char *file)
 	}
 	else{
 		lock_acquire(&syscall_lock);
+		/* After using lock, remove file */
 		success = filesys_remove(file);
 		lock_release(&syscall_lock);
 	}
@@ -372,10 +381,12 @@ open(const char *file)
 		exit(-1);
 	}
 	else{
+		/* open input file */
 		fp = filesys_open(file);
 		if(fp == NULL){
 			return -1;
 		}
+		/* construct file_info node */
 		fi = (struct file_info *)malloc(sizeof(struct file_info));
 		if(fi == NULL){
 			exit(-1);
@@ -383,6 +394,7 @@ open(const char *file)
 		else{
 			fi->fp = fp;
 			fi->fd = t->fdn++;
+			/* push into file list in the thread */
 			list_push_back(&t->files, &fi->file_elem);
 			return fi->fd;
 		}
@@ -435,6 +447,7 @@ close(int fd)
 	struct list_elem *e;
 	struct file_info *fentry = NULL;
 
+	/* search fd in the file list stored in the thread. */
 	for( e = list_begin(&t->files) ; e != list_end(&t->files) ; e = list_next(e) ){
 		fentry = list_entry( e, struct file_info, file_elem);
 		if(fentry->fd == fd){
@@ -442,12 +455,16 @@ close(int fd)
 		}
 	}
 	if(fentry != NULL){
+		/* close file */
 		file_close(fentry->fp);
+		/* remove that file in the file list stored in the thread. */
 		list_remove(e);
 		free(fentry);
 	}
 }
 
+/*	convert file descriptor number in the current thread
+	into the file pointer. */
 struct file*
 fd2fp(int fd)
 {
@@ -455,6 +472,7 @@ fd2fp(int fd)
 	struct list_elem *e;
 	struct file_info *fentry = NULL;
 
+	/* search file_info node that stores the input fd. */
 	for( e = list_begin(&t->files) ; e != list_end(&t->files) ; e = list_next(e) ){
 		fentry = list_entry( e, struct file_info, file_elem);
 		if(fentry->fd == fd){
@@ -468,6 +486,8 @@ fd2fp(int fd)
 		return fentry->fp;
 	}
 }
+
+/* check whether address is valid or not. */
 bool
 is_vaddr(const void *addr){
 	if(addr && is_user_vaddr(addr) && pagedir_get_page(thread_current()->pagedir, addr)){

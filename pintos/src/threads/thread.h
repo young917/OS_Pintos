@@ -7,6 +7,13 @@
 
 #include "threads/synch.h"
 
+#ifndef USERPROG
+/* Project #3. 
+extern bool thread_prior_aging; */
+#endif
+
+extern bool thread_prior_aging;
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -95,6 +102,10 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    /* For priority setting */
+    int recent_cpu;
+    int nice;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -124,6 +135,8 @@ struct thread
 	  struct file *fp;
 	  struct list_elem file_elem;
   };
+
+bool prior_comp(const struct list_elem* left, const struct list_elem* right, void *aux);
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -160,5 +173,25 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void thread_aging(void);
+
+
+/* Calculating Float */
+#define FRACTION (1<<14)
+
+int int_div_int(int a, int b);
+int int_sub_float(int a, int b);
+int int_mul_float(int a, int b);
+int float_div_int(int a, int b);
+int float_sub_int(int a, int b);
+int float_add_int(int a, int b);
+int float_div_float(int a, int b);
+int float_mul_float(int a, int b);
+int float_add_float(int a, int b);
+int float_sub_float(int a, int b);
+
+void update_load_avg_recent_cpu();
+void update_priority();
+int get_max_priority();
 
 #endif /* threads/thread.h */
