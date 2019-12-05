@@ -150,38 +150,42 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. */
+  /* Enforce preemption
+  when current thread spends its time_slice. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
+  /* Case when flag aging or mlfqs is set. */
   if(thread_prior_aging || thread_mlfqs){
     thread_aging();
   }
-
-#ifndef USERPROG
-  /* Project #3. 
-  if(thread_prior_aging == true){
-    thread_aging();
-  }*/
-#endif
-
 }
 
 void
 thread_aging(){
   struct thread *cur;
   cur = thread_current();
+
+  /* Whenever time interrupt is invoked, 
+    recent_cpu value of the thread in RUNNING state is increased. */
   cur->recent_cpu = float_add_int( cur->recent_cpu, 1);
+
+  /* Every second update load and recent_cpu */
   if(timer_ticks() % TIMER_FREQ == 0){
-    /* update load_avg */
     update_load_avg_recent_cpu();
   }
+
+  /* Every 4 ticks,
+    priorities of all thread in the system are recalculated.*/
   if(timer_ticks() % 4 == 0){
-    /* updata priority */
     update_priority();
+
+    /* After updating,
+      higher priority thread appears in the ready list. */
     if(cur->priority < get_max_priority()){
       intr_yield_on_return();
     }
+
   }
 
   return;
@@ -265,6 +269,8 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
   
+  /* If new thread's priority is higher than current thread,
+    yield current thread. */
   if(priority > thread_get_priority()){
     thread_yield();
   }
@@ -409,6 +415,14 @@ thread_set_priority (int new_priority)
   struct thread *cur = thread_current();
   int cur_max_prior = cur->priority;
   cur->priority = new_priority;
+  
+  /* If current thread's new priority is lower, yield. 
+    But if it has still highest priority,
+    (yield) insert current thread into the ready list ->
+    (schedule) next_thread_to_run will be current thread
+              -> cur == next -> thread_schedule_tail(NULL).
+    (thread_schedule_tail) current thread run again.
+    */
   if(cur_max_prior > new_priority){
     thread_yield();
   }
@@ -421,7 +435,7 @@ thread_get_priority (void)
   return thread_current()->priority;
 }
 
-/* Sets the current thread's nice value to NICE. */
+/* Sets the current thread's nice value to input value. */
 void
 thread_set_nice (int nice) 
 {
@@ -429,8 +443,10 @@ thread_set_nice (int nice)
   struct thread *cur = thread_current();
   int ready_max_prior = get_max_priority();
 
+  /* Change current nice value. */
   cur->nice = nice;
 
+  /* Recalculate current priority. */
   cur_priority = cur->priority;
   tmp = float_div_int(cur->recent_cpu, 4);
   tmp = int_sub_float(PRI_MAX, tmp);
@@ -444,9 +460,11 @@ thread_set_nice (int nice)
   }
   cur->priority = cur_priority;
 
+  /* No longer current thread has highest priority, then yield. */
   if(cur_priority < ready_max_prior){
     thread_yield();
   }
+
 }
 
 /* Returns the current thread's nice value. */
@@ -461,7 +479,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return int_mul_float(100, load_avg) / FRACTION;
+  return float_add_float( int_mul_float(100, load_avg), int_div_int(1,2) ) / FRACTION;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -469,7 +487,7 @@ int
 thread_get_recent_cpu (void) 
 {
   struct thread *cur_thread = thread_current();
-  return int_mul_float(100, cur_thread->recent_cpu) / FRACTION;
+  return float_add_float( int_mul_float(100, cur_thread->recent_cpu), int_div_int(1,2) ) / FRACTION;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -557,6 +575,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->wakeup = 0;
+  
   list_push_back (&all_list, &t->allelem);
   t->nice = running_thread()->nice;
   t->recent_cpu = running_thread()->recent_cpu;
@@ -731,6 +751,7 @@ update_load_avg_recent_cpu(){
   int ready_threads = list_size(&ready_list);
   struct list_elem *e;
 
+  /* ready_threads = # of thread in READY or RUNNING (no idle). */
   if(thread_current() != idle_thread){
     ready_threads += 1;
   }
@@ -739,6 +760,7 @@ update_load_avg_recent_cpu(){
   tmp2 = int_mul_float(ready_threads, int_div_int(1,60));
   load_avg = float_add_float(tmp1,tmp2);
 
+  /* Recalculate all thread's recent cpu value (except idle thread). */
   for (e = list_begin (&all_list); e != list_end (&all_list);
        e = list_next (e))
     {
@@ -752,6 +774,7 @@ update_load_avg_recent_cpu(){
       }
     }
 }
+
 void
 update_priority(){
   int tmp1;
@@ -772,8 +795,8 @@ update_priority(){
         t->priority = PRI_MIN;
       }
     }
-    //list_sort(&ready_list, prior_comp, NULL);
 }
+
 int
 get_max_priority(){
   struct thread *t;

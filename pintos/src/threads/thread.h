@@ -102,6 +102,8 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    int64_t wakeup;
+    
     /* For priority setting */
     int recent_cpu;
     int nice;
